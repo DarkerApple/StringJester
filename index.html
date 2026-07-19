@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>MARIONETTE</title>
 <meta name="description" content="MARIONETTE — a 2D horror rhythm game for five strings. Single file, no dependencies.">
+<meta name="theme-color" content="#040409">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{
   --amber:#e0a94f; --ink:#07070c; --bone:#e6dac2; --dim:#7a7160; --line:#2c2620;
@@ -84,6 +88,17 @@ pre{background:#0b0a10;border:1px solid #1c1813;padding:10px;font-size:11px;over
 .ebar input[type=text],.ebar input[type=number],.ebar select{font-size:11px;padding:3px 6px}
 .ebar .lbl{color:#6a6152;margin-left:6px}
 #einsp{border-top:1px solid #17130f;border-bottom:none;min-height:34px}
+.btn,.ebtn,select,input,kbd.keycap{touch-action:manipulation}
+@media (max-width:640px){
+  .panel{padding:16px 14px;max-width:96vw;max-height:84vh}
+  h1.title{letter-spacing:.28em;font-size:clamp(22px,7vw,30px);text-indent:.28em}
+  h2{font-size:15px;letter-spacing:.2em}
+  .btn{padding:13px 10px;font-size:13px;letter-spacing:.14em}
+  .actrow{padding:9px 8px;gap:7px}
+  .actrow .nm b{font-size:12px;letter-spacing:.1em}
+  .stats{font-size:12px}
+  #etl{height:150px}
+}
 </style>
 </head>
 <body>
@@ -122,7 +137,8 @@ const CFG = {
   laneNames: ['handL','legL','head','legR','handR'],  // crossbar order, left→right
   laneOf: {handL:0, legL:1, head:2, legR:3, handR:4},
   depthScale: d => 0.72 + 0.85*d,   // string length multiplier vs puppetDepth
-  version: '1.0.0',
+  isTouch:false,                    // set at boot from pointer:coarse
+  version: '1.1.0',
 };
 
 /* ═══ MODULE: U — utilities ═══ */
@@ -202,14 +218,21 @@ const Settings = {
   KEY:'marionette.settings.v1',
   d:null,
   defaults(){ return {
-    bindings:{ KeyA:'head', KeyS:'handL', KeyD:'handR', KeyF:'legL', KeyG:'legR',
+    // ASDFG maps straight across the crossbar, left to right
+    bindings:{ KeyA:'handL', KeyS:'legL', KeyD:'head', KeyF:'legR', KeyG:'handR',
                ArrowLeft:'tiltL', ArrowRight:'tiltR', KeyJ:'tiltL', KeyK:'tiltR' },
     audioOffset:0, inputOffset:0, calibrated:false,
     judgeScale:1, volume:0.85, musicVol:0.9, sfxVol:0.9,
     reduceFlash:false, noScare:false, visMetronome:false, showLatency:true,
   };},
   load(){ try{ this.d=Object.assign(this.defaults(), JSON.parse(localStorage.getItem(this.KEY)||'{}')); }
-          catch(e){ this.d=this.defaults(); } return this.d; },
+          catch(e){ this.d=this.defaults(); }
+    // migrate saves that still carry the untouched pre-1.1 default (A=head)
+    const oldDef={KeyA:'head',KeyS:'handL',KeyD:'handR',KeyF:'legL',KeyG:'legR',
+      ArrowLeft:'tiltL',ArrowRight:'tiltR',KeyJ:'tiltL',KeyK:'tiltR'};
+    const canon=b=>Object.entries(b||{}).sort((x,y)=>x[0]<y[0]?-1:1).map(e=>e.join(':')).join(',');
+    if(canon(this.d.bindings)===canon(oldDef)) this.d.bindings=this.defaults().bindings;
+    return this.d; },
   save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.d)); }catch(e){} },
   actionOf(code){ return this.d.bindings[code]||null; },
   keyFor(action){ for(const c in this.d.bindings) if(this.d.bindings[c]===action) return c; return null; },
@@ -229,10 +252,23 @@ const Story = {
     if(!prev || res.score>prev.score) this.d.acts[actId]=res;
     const n=parseInt((actId.match(/\d+/)||[0])[0],10);
     if(n>=1 && n<5 && res.grade!=='D') this.d.unlocked=Math.max(this.d.unlocked, n+1);
-    if(n===5) this.d.ending = res.grade;
     // the audience remembers: your failures seed the next act's unease
     this.d.baseUnease = U.clamp(0.06 + res.peakUnease*0.3 + (1-res.acc)*0.22, 0.05, 0.6);
+    if(n===5) this.d.ending = this.path();
     this.save();
+  },
+  /* Which storyline is this run on? The director decides from your grades
+     and how restless the house has become. Surtitle scripts, the finale's
+     staging, and the ending all follow the path. */
+  path(){
+    const recs=Object.keys(this.d.acts).filter(k=>/^act\d$/.test(k)).map(k=>this.d.acts[k]);
+    if(!recs.length) return 'first';
+    const pts={S:4,A:3,B:2,C:1,D:0};
+    const avg=recs.reduce((s,r)=>s+(pts[r.grade]??0),0)/recs.length;
+    const un=this.d.baseUnease??0.08;
+    if(avg>=3 && un<0.32) return 'gentle';
+    if(avg<=1.4 || un>0.45) return 'understudy';
+    return 'long';
   },
   reset(){ this.d={acts:{},unlocked:1,baseUnease:0.08,ending:null}; this.save(); },
 };
@@ -691,7 +727,7 @@ const Scoring = {
    Latency discipline: every judgment uses event.timeStamp mapped through
    Clock.stampToT, never the frame the event happens to be processed in. */
 const Input = {
-  down:{}, tiltKey:0, dragTilt:null, pointers:new Map(),
+  down:{}, tiltKey:0, dragTilt:null, pointers:new Map(), touchHeld:new Set(),
   lastInputSongT:-99, remapCb:null,
   init(){
     addEventListener('keydown', e=>{
@@ -712,18 +748,20 @@ const Input = {
     });
     const cv=document.getElementById('cv');
     cv.addEventListener('pointerdown', e=>{
-      cv.setPointerCapture(e.pointerId);
+      try{ cv.setPointerCapture(e.pointerId); }catch(err){}
       if(Game.mode==='calib'){ Game.onTrigger(-1, e.timeStamp, 'tap'); return; }
       if(Game.mode!=='play' && Game.mode!=='editor-play') { Game.onStageTap(e); return; }
       const S=Game.S; if(!S||!S.anchors) return;
       // five tap zones, hit-tested against the actual rendered anchor positions
       let best=-1, bd=1e9;
       S.anchors.forEach((a,i)=>{ const d=U.dist(e.clientX,e.clientY,a.x,a.y); if(d<bd){bd=d;best=i;} });
-      const hitR=Math.max(34, L.W*0.035);
+      const coarse=e.pointerType==='touch'||CFG.isTouch;
+      const hitR=coarse? Math.max(46, L.W*0.055) : Math.max(34, L.W*0.035);
       if(bd<hitR){
         this.pointers.set(e.pointerId,{kind:'anchor',anchor:best});
+        this.touchHeld.add(best);
         Game.onTrigger(best, e.timeStamp, 'tap');
-      } else if(Math.abs(e.clientY-L.crossY)<L.H*0.09){
+      } else if(Math.abs(e.clientY-L.crossY)<L.H*(coarse?0.13:0.09)){
         this.pointers.set(e.pointerId,{kind:'tilt',x0:e.clientX,base:this.dragTilt??0});
       }
     });
@@ -733,7 +771,7 @@ const Input = {
     });
     const up=e=>{
       const p=this.pointers.get(e.pointerId);
-      if(p){ if(p.kind==='anchor') Game.onRelease(p.anchor, e.timeStamp);
+      if(p){ if(p.kind==='anchor'){ this.touchHeld.delete(p.anchor); Game.onRelease(p.anchor, e.timeStamp); }
         if(p.kind==='tilt') this.dragTilt=null;
         this.pointers.delete(e.pointerId); }
     };
@@ -747,7 +785,8 @@ const Input = {
     if(Math.abs(this.tiltKey)<0.004&&k===0) this.tiltKey=0;
   },
   tilt(){ return this.dragTilt!=null? this.dragTilt : this.tiltKey; },
-  actionDown(a){ return !!this.down[a]; },
+  /* a held finger on a hook counts as a held key (touch holds) */
+  actionDown(a){ return !!this.down[a] || (CFG.laneOf[a]!=null && this.touchHeld.has(CFG.laneOf[a])); },
   anyLaneDown(){ return CFG.laneNames.some(n=>this.down[n]); },
 };
 
@@ -1826,22 +1865,27 @@ const Renderer = {
     for(let a=0;a<5;a++){
       const p=S.anchors[a];
       const lane=S.str.lanes[Strings.mapA2L(S,a)];
-      // hook
+      // hook (larger with a faint tap ring on touch devices)
+      const hookR=CFG.isTouch?5:3.4;
       ctx.fillStyle=lane.slack?'#4a3428':'#63503a';
-      ctx.beginPath(); ctx.arc(p.x,p.y,3.4,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x,p.y,hookR,0,7); ctx.fill();
+      if(CFG.isTouch){
+        ctx.strokeStyle=U.rgba('#cfc4ad',0.14); ctx.lineWidth=1;
+        ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(20,L.W*0.035),0,7); ctx.stroke();
+      }
       // input glow
       const gAge=tR-lane.glow;
       const kAct=CFG.laneNames[a];
       if(Input.actionDown(kAct)||gAge<0.15){
         ctx.fillStyle=U.rgba('#ffe9b0',0.5*(Input.actionDown(kAct)?1:1-gAge/0.15));
-        ctx.beginPath(); ctx.arc(p.x,p.y,6,0,7); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x,p.y,hookR+2.6,0,7); ctx.fill();
       }
-      // key label (fades during play, returns when idle)
+      // key label (fades during play, returns when idle; pointless on touch)
       const idleT=Math.min(1,Math.max(0,(tR-Input.lastInputSongT)-4)/3);
-      if(idleT>0||S.now<4){
+      if(!CFG.isTouch&&(idleT>0||S.now<4)){
         ctx.fillStyle=U.rgba('#cfc4ad',0.5*Math.max(idleT,S.now<4?1-S.now/4:0));
         ctx.font='10px monospace'; ctx.textAlign='center';
-        ctx.fillText(Settings.keyLabel(CFG.laneNames[a]), p.x, p.y-12);
+        ctx.fillText(Settings.keyLabel(CFG.laneNames[a]), p.x, p.y-14);
       }
       if(S.mode==='results') continue;
       // departure rings
@@ -2002,23 +2046,26 @@ const Renderer = {
       ctx.fillText('COMBO', L.stageX1+(L.W-L.stageX1)/2+9, L.H*0.42+14);
     }
     // travel latency readout — the number you are playing ahead by
+    const narrow=L.W<700;
     if(Settings.d.showLatency&&!S.invert&&(Game.mode==='play'||Game.mode==='editor-play')){
       ctx.font='10px monospace'; ctx.textAlign='left';
       ctx.fillStyle=U.rgba('#7a7160',0.85);
-      ctx.fillText(`lead ${Math.round(Strings.travel(S)*1000)}ms`, 12, L.crossY+4);
-      ctx.fillText(`string ${Math.round(S.strLen)}`, 12, L.crossY+17);
+      const lx=8, ly=narrow?14:L.crossY+4;
+      ctx.fillText(`lead ${Math.round(Strings.travel(S)*1000)}ms`, lx, ly);
+      ctx.fillText(`string ${Math.round(S.strLen)}`, lx, ly+13);
     }
     // twist indicator
     const tw=Strings.totalTwists(S);
     if(tw>0){
       ctx.textAlign='left';
       ctx.font='11px Georgia,serif';
+      const ty=narrow?L.crossY+56:L.crossY+34;
       ctx.fillStyle=U.rgba('#c03428',0.75+0.25*Math.sin(tR*6));
-      ctx.fillText('✕'.repeat(tw)+' tangled', 12, L.crossY+34);
+      ctx.fillText('✕'.repeat(tw)+' tangled', 12, ty);
       const un=S.str.untangle;
       if(un.active){
         ctx.fillStyle=U.rgba('#bcd8f0',0.9);
-        ctx.fillText(un.phase==='call'?'watch…':'echo it back', 12, L.crossY+48);
+        ctx.fillText(un.phase==='call'?'watch…':'echo it back', 12, ty+14);
       }
     }
     // progress thread across the very top
@@ -2065,11 +2112,13 @@ const L = {
   W:800,H:600,cx:400,crossY:60,stageX0:80,stageX1:720,stageTop:90,lipY:470,audTop:500,barHalf:120,
   recompute(){
     this.W=innerWidth; this.H=innerHeight; this.cx=this.W/2;
-    this.crossY=this.H*0.088;
-    this.stageX0=this.W*0.115; this.stageX1=this.W*0.885;
+    const narrow=this.W<700;
+    this.crossY=this.H*(narrow?0.072:0.088);
+    this.stageX0=this.W*(narrow?0.045:0.115); this.stageX1=this.W*(narrow?0.955:0.885);
     this.stageTop=this.H*0.155; this.lipY=this.H*0.775;
     this.audTop=this.H*0.828;
-    this.barHalf=Math.min(this.W*0.17,300);
+    // on phones the bar spans most of the width so hooks sit a thumb apart
+    this.barHalf=narrow? this.W*0.40 : Math.min(this.W*0.17,300);
   },
   floorAt(d){ return U.lerp(this.H*0.740, this.H*0.560, d); },
 };
@@ -2453,7 +2502,8 @@ const UI = {
     this.show(
       U.el('h2',null,'five acts'),
       ...rows,
-      Story.d.ending? U.el('div',{class:'storyline'},this.endingLine(Story.d.ending)) : null,
+      Story.d.ending? U.el('div',{class:'storyline'},this.endingLine(Story.d.ending)) :
+        (this.pathFlavor()? U.el('div',{class:'storyline'},this.pathFlavor()) : null),
       this.btn('back',()=>this.showTitle(),'small'));
   },
   showFree(){
@@ -2538,11 +2588,11 @@ const UI = {
       toggle('visual metronome','visMetronome'),
       toggle('show string latency','showLatency'),
       U.el('h3',null,'keys'),
-      U.el('div',{class:'small'},'five strings on the crossbar, left to right: handL · legL · head · legR · handR. click a key to rebind.'),
+      U.el('div',{class:'small'},'five strings on the crossbar, left to right: handL · legL · head · legR · handR — A S D F G maps straight across by default. click a key to rebind.'),
       ...CFG.laneNames.map(remapRow), remapRow('tiltL'), remapRow('tiltR'),
       U.el('div',{class:'row'},
-        this.btn('spec layout (A=head)',()=>{ S.bindings={KeyA:'head',KeyS:'handL',KeyD:'handR',KeyF:'legL',KeyG:'legR',ArrowLeft:'tiltL',ArrowRight:'tiltR',KeyJ:'tiltL',KeyK:'tiltR'}; Settings.save(); this.showSettings(); },'small inline'),
-        this.btn('spatial layout (ASDFG →)',()=>{ S.bindings={KeyA:'handL',KeyS:'legL',KeyD:'head',KeyF:'legR',KeyG:'handR',ArrowLeft:'tiltL',ArrowRight:'tiltR',KeyJ:'tiltL',KeyK:'tiltR'}; Settings.save(); this.showSettings(); },'small inline')),
+        this.btn('default: ASDFG left→right',()=>{ S.bindings=Settings.defaults().bindings; Settings.save(); this.showSettings(); },'small inline'),
+        this.btn('classic (A=head)',()=>{ S.bindings={KeyA:'head',KeyS:'handL',KeyD:'handR',KeyF:'legL',KeyG:'legR',ArrowLeft:'tiltL',ArrowRight:'tiltR',KeyJ:'tiltL',KeyK:'tiltR'}; Settings.save(); this.showSettings(); },'small inline')),
       U.el('hr'),
       this.btn('erase campaign progress',()=>{ if(confirm('erase all campaign progress?')){ Story.reset(); toast('the audience forgets. for now.'); } },'small'),
       this.btn('back',()=>this.showTitle(),'small'));
@@ -2555,7 +2605,7 @@ const UI = {
         `<p>You are the puppeteer. Five strings hang from your control cross to the marionette on the stage below. When you pull a string, a <b>pulse travels down it at a fixed speed</b> — the puppet moves only when the pulse <i>arrives</i>.</p>
         <p style="margin-top:8px"><b>arrivalTime = inputTime + stringLength / pulseSpeed</b></p>
         <p style="margin-top:8px">So you must press <b>early</b>, by exactly the travel latency. A hollow ring contracts onto each crossbar hook: press when it lands. Your pulse is the bright bead sliding down the string — watch it fly, then watch it land. Judgment (±35 / ±70 / ±120 ms) is measured where the pulse <i>arrives</i>, never where you pressed. Deeper stages mean longer strings mean more dread.</p>
-        <p style="margin-top:8px"><b>Keys</b> — strings: <kbd>${Settings.keyLabel('handL')}</kbd><kbd>${Settings.keyLabel('legL')}</kbd><kbd>${Settings.keyLabel('head')}</kbd><kbd>${Settings.keyLabel('legR')}</kbd><kbd>${Settings.keyLabel('handR')}</kbd> (crossbar order: handL legL head legR handR) · tilt: <kbd>←</kbd><kbd>→</kbd> or <kbd>J</kbd><kbd>K</kbd> · pause: <kbd>Esc</kbd>. Touch: tap the hooks themselves; drag the bar to tilt.</p>
+        <p style="margin-top:8px"><b>Keys</b> — strings: <kbd>${Settings.keyLabel('handL')}</kbd><kbd>${Settings.keyLabel('legL')}</kbd><kbd>${Settings.keyLabel('head')}</kbd><kbd>${Settings.keyLabel('legR')}</kbd><kbd>${Settings.keyLabel('handR')}</kbd> mapping straight across the crossbar, left to right (handL legL head legR handR) · tilt: <kbd>←</kbd><kbd>→</kbd> or <kbd>J</kbd><kbd>K</kbd> · pause: <kbd>Esc</kbd>. <b>Touch:</b> tap the hooks themselves; keep a finger down for holds; drag anywhere on the bar to tilt. Landscape gives the fullest stage.</p>
         <p style="margin-top:8px"><b>Note types</b> — <b>pull</b>: tap. <b>hold</b>: keep tension until the sleeve ends. <b>tilt</b>: match the dashed ghost bar; sustained tilt rocks her into a walk. <b>resist</b>: the red mark descends on its own — she is moving without you. Do NOT pull that string inside the window. <b>chord</b>: several strings, one moment.</p>
         <p style="margin-top:8px"><b>There is no health bar.</b> Miss and the string goes <b>slack</b> — the limb hangs dead until you land the next note on it cleanly. Trigger strings out of their charted order (or mash neighbours) and they <b>twist</b>: a twisted pair swaps its keys, up to three twists deep. While tangled, a pale call-and-response appears — watch the shimmer, echo it back on the beat, inside the song. She will wait. The audience notices waiting.</p>`}),
       U.el('details',null,U.el('summary',null,'chart format + deep link'),
@@ -2588,10 +2638,18 @@ const UI = {
     };
     return (lines[actId]||{})[grade]||'';
   },
-  endingLine(g){
-    return g==='S'||g==='A' ? 'ending: THE GENTLE HAND — they let you set the cross down.' :
-           g==='B'||g==='C' ? 'ending: THE LONG RUN — the show is extended indefinitely.' :
-                              'ending: UNDERSTUDY — someone else holds your cross now. watch.';
+  endingLine(e){
+    // accepts a path name (new saves) or a legacy grade letter (old saves)
+    const p= e==='S'||e==='A'?'gentle' : e==='B'||e==='C'?'long' : e==='D'?'understudy' : e;
+    return p==='gentle'?     'ending: THE GENTLE HAND — she bowed, and they let you set the cross down.' :
+           p==='understudy'? 'ending: THE UNDERSTUDY — someone else holds your cross now. your seat is front row, center.' :
+                             'ending: THE LONG RUN — the show is extended indefinitely. places.';
+  },
+  pathFlavor(){
+    const p=Story.path();
+    return p==='gentle'?     'the director speaks of you warmly, in the third person.' :
+           p==='understudy'? 'someone new has been measuring your cross.' :
+           p==='long'?       'the run has been extended. again.' : null;
   },
   showResults(res,actId){
     const c=res.counts;
@@ -2611,7 +2669,7 @@ const UI = {
           ['audience unease, peak',Math.round(res.peakUnease*100)+'%'],
         ].map(([k,v])=>U.el('tr',null,U.el('td',null,k),U.el('td',null,String(v))))),
       actId? U.el('div',{class:'storyline'},this.actLine(actId,res.grade)) : null,
-      actId==='act5'? U.el('div',{class:'storyline'},this.endingLine(res.grade)) : null,
+      actId==='act5'? U.el('div',{class:'storyline'},this.endingLine(Story.d.ending||res.grade)) : null,
       actId&&actId!=='act5'&&Story.d.unlocked>parseInt(actId[3])? this.btn('continue',()=>{
         const next='act'+(parseInt(actId[3])+1); Game.startChart(Charts.get(next).build(),{actId:next}); }) : null,
       this.btn('replay',()=>{ if(actId) Game.startChart(Charts.get(actId).build(),{actId});
@@ -3129,13 +3187,25 @@ const Charts = (()=>{
     for(const st of choreo()){ emit(sb,st,0);
       if(st.midi) sb.m('mb','musicbox',st.b,st.midi,st.durB||1.2,0.85); }
     sb.m('mb','musicbox',129,69,3,0.9);
-    sb.line(3,'again. from the top.');
-    sb.line(11,'the head first. always the head.');
-    sb.line(34,'now the hands. she used her hands.');
-    sb.line(58,'walk her. she walked here once.');
-    sb.line(106,'hold. hold it exactly there.');
-    sb.line(121,'she remembers this part on her own.');
-    sb.line(128,'end of rehearsal.');
+    // the script changes if you have already seen an ending
+    const A1L= Story.d.ending? [
+      [3,'again? you know how it goes.'],
+      [11,'the head first. it is always the head.'],
+      [34,'the hands. you remember what the hands did.'],
+      [58,'walk her. you both know where.'],
+      [106,'hold. you always hold it here.'],
+      [121,'she rehearsed this while you were away.'],
+      [128,'end of rehearsal. it is never the end.'],
+    ] : [
+      [3,'again. from the top.'],
+      [11,'the head first. always the head.'],
+      [34,'now the hands. she used her hands.'],
+      [58,'walk her. she walked here once.'],
+      [106,'hold. hold it exactly there.'],
+      [121,'she remembers this part on her own.'],
+      [128,'end of rehearsal.'],
+    ];
+    A1L.forEach(([b,t])=>sb.line(b,t));
     const stage={
       palette:['#120f18','#2b2438','#e2a44b','#e6d9bd','#4a3c58','#372b44','#96714a','#d8c096','#7a5f74','#1c1728','#71465a','#93a0bd'],
       flats:[
@@ -3174,14 +3244,44 @@ const Charts = (()=>{
     for(let i=0;i<4;i++) sb.n(37.5+i*6,'head');
     sb.tiltN(100,4,[[0,0],[0.3,0.7],[0.7,-0.7],[1,0]]);
     sb.m('pn','piano',129,57,4,0.9);
-    sb.line(2,'this is the kitchen.');
-    sb.line(10,'you remember the kitchen.');
-    sb.line(34,'the table is set for three.');
-    sb.line(56,'the third chair is new.');
+    const path=Story.path();
+    const A2L={
+      gentle:[
+        [2,'this is the kitchen.'],
+        [10,'you kept her steady last night. she trusts the strings now.'],
+        [34,'the table is set for three.'],
+        [56,'the third chair is for a guest who is running late.'],
+        [82,'the window looked onto the yard. it looks onto them now.'],
+        [126,'gently done. she barely felt the wires.'],
+      ],
+      long:[
+        [2,'this is the kitchen. it is always the kitchen.'],
+        [10,'performance one hundred and twelve.'],
+        [34,'the table is set for three. it is always set for three.'],
+        [56,'the third chair is new. the third chair is always new.'],
+        [82,'the window looked onto the yard. it looks onto them now.'],
+        [126,'adequate. the run is extended.'],
+      ],
+      understudy:[
+        [2,'this is the kitchen.'],
+        [10,'the director is watching your hands tonight. not her.'],
+        [34,'the table is set for three.'],
+        [56,'the third chair is for your replacement.'],
+        [82,'the window looked onto the yard. they are checking your grip.'],
+        [126,'she moved better than you pulled. it was noted.'],
+      ],
+      first:[
+        [2,'this is the kitchen.'],
+        [10,'you remember the kitchen.'],
+        [34,'the table is set for three.'],
+        [56,'the third chair is new.'],
+        [82,'the window looked onto the yard. it looks onto them now.'],
+        [126,'you performed this beautifully the first time.'],
+      ],
+    };
+    (A2L[path]||A2L.first).forEach(([b,t])=>sb.line(b,t));
     sb.ev(80,{type:'flatSwap',flat:'window',to:'windowDark'});
-    sb.line(82,'the window looked onto the yard. it looks onto them now.');
     sb.ev(6,{type:'audience',unease:0.06});
-    sb.line(126,'you performed this beautifully the first time.');
     const chair=(x,y,s)=>P([x,y],[x+0.052*s,y],[x+0.052*s,y+0.026*s],[x+0.042*s,y+0.026*s],[x+0.042*s,y+0.16*s],[x+0.03*s,y+0.16*s],[x+0.03*s,y+0.05*s],[x+0.012*s,y+0.05*s],[x+0.012*s,y+0.16*s],[x,y+0.16*s]);
     const stage={
       palette:['#0d1016','#232c38','#d69a3e','#dccfb4','#39485c','#2a3542','#8a6844','#c4ad84','#516179','#141a22','#4a5468','#a8c4d8'],
@@ -3224,9 +3324,46 @@ const Charts = (()=>{
     const teach=['head','handL','handR','legL'];
     teach.forEach((lane,i)=>{ sb.n(8+i*8,lane); sb.m('pl','pluck',8+i*8,60+i*3,1,0.8);
       res(12+i*8,lane); });
-    sb.line(2,'she moves on her own now.');
-    sb.line(10,'when the red mark falls — do not pull.');
-    sb.line(26,'let her.');
+    const path=Story.path();
+    const A3L={
+      gentle:[
+        [2,'she moves on her own now.'],
+        [10,'when the red mark falls — do not pull.'],
+        [26,'let her. she is safest when you are still.'],
+        [86,'the chair was not that close before.'],
+        [130,'she is getting better at it.'],
+        [137,'watch.'],
+        [152,'you were kind to be still. she noticed.'],
+      ],
+      long:[
+        [2,'she moves on her own now. she has had the practice.'],
+        [10,'when the red mark falls — do not pull.'],
+        [26,'let her. we have all learned to let her.'],
+        [86,'the chair inches forward every hundred shows.'],
+        [130,'she is getting better at it.'],
+        [137,'watch. the house watches you watching.'],
+        [152,'stillness accepted. the run continues.'],
+      ],
+      understudy:[
+        [2,'she moves on her own now. she may not need you.'],
+        [10,'when the red mark falls — do not pull.'],
+        [26,'let her. she is being assessed. so are you.'],
+        [86,'the chair was moved for a better view of your hands.'],
+        [130,'she no longer waits for your pulses.'],
+        [137,'watch. this is how it looks done well.'],
+        [152,'she can do all of this without you. remember that.'],
+      ],
+      first:[
+        [2,'she moves on her own now.'],
+        [10,'when the red mark falls — do not pull.'],
+        [26,'let her.'],
+        [86,'the chair was not that close before.'],
+        [130,'she is getting better at it.'],
+        [137,'watch.'],
+        [152,'good. you are learning to be still.'],
+      ],
+    };
+    (A3L[path]||A3L.first).forEach(([b,t])=>sb.line(b,t));
     // middle: pulls with resists woven between
     const lanes=CFG.laneNames;
     for(let bar=11;bar<22;bar++){
@@ -3237,7 +3374,6 @@ const Charts = (()=>{
     }
     sb.ev(80,{type:'audience',set:'rowsCloser'});
     sb.ev(84,{type:'flatSwap',flat:'chair',to:'chairClose'});
-    sb.line(86,'the chair was not that close before.');
     // dense: resist clusters against real work
     for(let bar=23;bar<32;bar++){
       const b=bar*4, li=(bar*2)%5;
@@ -3249,13 +3385,10 @@ const Charts = (()=>{
     sb.chordN(128,['handL','handR']); sb.m('pl','pluck',128,72,1,0.9); sb.m('pl','pluck',128,76,1,0.9);
     sb.tiltN(130,4,[[0,0],[0.5,0.8],[1,0]]);
     sb.ev(118,{type:'footlights',flicker:0.22});
-    sb.line(130,'she is getting better at it.');
     // outro: she dances alone; you only watch
     const solo=['head','handL','handR','legR','legL','head'];
     solo.forEach((lane,i)=>res(136+i*2,lane,0.34));
-    sb.line(137,'watch.');
     sb.n(150,'head'); sb.m('pl','pluck',150,69,2,0.9);
-    sb.line(152,'good. you are learning to be still.');
     const stage={
       palette:['#100e12','#2c2732','#d09040','#d8ccb0','#453e4c','#332d3a','#8f6c46','#c9b088','#5e5468','#191521','#5c4250','#8e2f2a'],
       flats:[
@@ -3288,9 +3421,43 @@ const Charts = (()=>{
         sb.m('ost','pluck',bar*4+k*0.5,[57,60,64,67,64,60][k%6]+((bar%8)>=4?2:0),0.4,k%2?0.3:0.45,0.65);
       if(bar%8===4) sb.m('bell','bell',bar*4,69+((bar>>3)%3)*3,2,0.5,0.7);
     }
-    sb.line(1,'deeper.');
+    const path=Story.path();
+    const A4L={
+      gentle:[
+        [1,'deeper.'],
+        [17,'the strings pay out. hold her lightly across the distance.'],
+        [85,'the lights cannot reach the back wall.'],
+        [126,'she is looking for the source of the pulses.'],
+        [182,'keep pulling. she trusts the dark because she trusts you.'],
+        [215,'you carried her through the dark. the house noticed.'],
+      ],
+      long:[
+        [1,'deeper. the stage goes back further every season.'],
+        [17,'the strings pay out. they have always been this long.'],
+        [85,'the lights cannot reach the back wall. they never could.'],
+        [126,'she is looking for the source of the pulses.'],
+        [182,'keep pulling. the back wall keeps its distance.'],
+        [215,'that will do for tonight, they said. nobody left.'],
+      ],
+      understudy:[
+        [1,'deeper. your replacement is watching from the wings.'],
+        [17,'the strings pay out. try not to drop her this time.'],
+        [85,'the lights cannot reach the back wall.'],
+        [126,'she is looking for the source of the pulses. she seems unsure there is one.'],
+        [182,'keep pulling. prove the cross belongs in your hands.'],
+        [215,'the director made notes all night. none were about her.'],
+      ],
+      first:[
+        [1,'deeper.'],
+        [17,'the strings pay out. listen to how long they are.'],
+        [85,'the lights cannot reach the back wall.'],
+        [126,'she is looking for the source of the pulses.'],
+        [182,'keep pulling. almost to the back wall.'],
+        [215,'that will do for tonight, they said. nobody left.'],
+      ],
+    };
+    (A4L[path]||A4L.first).forEach(([b,t])=>sb.line(b,t));
     sb.ev(16,{type:'depth',to:0.72,duration:6});
-    sb.line(17,'the strings pay out. listen to how long they are.');
     // moderate: pulls + holds
     for(let bar=5;bar<12;bar++){
       const b=bar*4, li=bar%5;
@@ -3305,7 +3472,6 @@ const Charts = (()=>{
       if(bar%4===0) sb.chordN(b+3.5,['legL','legR']);
     }
     sb.ev(84,{type:'footlights',flicker:0.45});
-    sb.line(85,'the lights cannot reach the back wall.');
     sb.ev(92,{type:'depth',to:0.95,duration:8});
     // the deep: long latency, sparse but unforgiving
     for(let bar=23;bar<31;bar++){
@@ -3315,7 +3481,6 @@ const Charts = (()=>{
     }
     sb.tiltN(100,6,[[0,0],[0.25,0.9],[0.6,-0.9],[1,0]]);
     sb.ev(124,{type:'scare',id:'lookUp'});
-    sb.line(126,'she is looking for the source of the pulses.');
     // peak
     for(let bar=32;bar<45;bar++){
       const b=bar*4, li=bar%5;
@@ -3329,13 +3494,11 @@ const Charts = (()=>{
       s.m('cr','creak',b-0.6,40,0.8,0.7,0.8); }
     sb.ev(148,{type:'footlights',set:[0.4,0.9,0.35]});
     sb.ev(180,{type:'depth',to:0.7,duration:6});
-    sb.line(182,'keep pulling. almost to the back wall.');
     for(let bar=46;bar<53;bar++){
       const b=bar*4, li=(bar*2)%5;
       sb.n(b,lanes[li]); sb.n(b+2,lanes[(li+3)%5]);
     }
     sb.chordN(212,['handL','handR']); sb.n(214,'head');
-    sb.line(215,'that will do for tonight, they said. nobody left.');
     const stage={
       palette:['#0a090f','#1c1a26','#c98a38','#cfc2a8','#2e2b3c','#232030','#836243','#bfa87f','#3f3a52','#121019','#463a52','#e8d9b0'],
       flats:[
@@ -3369,15 +3532,54 @@ const Charts = (()=>{
       sb.m('dr','drone',bar*3,roots[c]+12,3.2,0.4,0.5);
       if(bar%2===0) sb.m('bass','bass',bar*3,roots[c],2,0.4,0.8);
     }
-    sb.line(2,'last performance.');
-    sb.line(20,'the house is full tonight.');
-    sb.line(44,'they have seen it every night. they stay for the end.');
+    const path=Story.path();
+    const A5L={
+      gentle:[
+        [2,'last performance.'],
+        [20,'the house is full tonight. they came to say goodbye.'],
+        [44,'they have seen it every night. they stay for the end.'],
+        [56,'look up.'],
+        [62,'who is holding you?'],
+        [90,'yes. like that. it is easier when you stop resisting.'],
+        [128,'bow.'],
+        [130,'you may set the cross down now.'],
+      ],
+      long:[
+        [2,'last performance. of this week.'],
+        [20,'the house is full tonight. the house is always full.'],
+        [44,'they have seen it every night. they will see it every night.'],
+        [56,'look up.'],
+        [62,'who is holding you?'],
+        [90,'yes. like that. it is easier when you stop counting.'],
+        [128,'bow.'],
+        [130,'again. from the top.'],
+      ],
+      understudy:[
+        [2,'last performance. yours, at least.'],
+        [20,'the house is full tonight. one seat is kept empty.'],
+        [44,'they have seen it every night. tonight they watch the cross change hands.'],
+        [56,'look up.'],
+        [62,'who is holding you?'],
+        [90,'yes. like that. see how little they need you?'],
+        [118,'she will take the bow herself.'],
+        [128,'bow.'],
+        [130,'front row. center. your seat is ready.'],
+      ],
+      first:[
+        [2,'last performance.'],
+        [20,'the house is full tonight.'],
+        [44,'they have seen it every night. they stay for the end.'],
+        [56,'look up.'],
+        [62,'who is holding you?'],
+        [90,'yes. like that. it is easier when you stop resisting.'],
+        [128,'bow.'],
+      ],
+    };
+    (A5L[path]||A5L.first).forEach(([b,t])=>sb.line(b,t));
     // the reveal
-    sb.line(56,'look up.');
     sb.ev(58,{type:'scare',id:'reveal'});
     sb.ev(58.5,{type:'pullback',to:1,duration:3});
     sb.ev(61,{type:'invert',on:true});
-    sb.line(62,'who is holding you?');
     // part two: Act I's phrase, inverted — pulses arrive from above; you react
     for(const st of cho){ if(st.sec!=='phrase') continue;
       const b=st.b-84+66;
@@ -3387,17 +3589,24 @@ const Charts = (()=>{
       const b=st.b-12+92;
       sb.n(b,st.lane);
       sb.m('bl','bell',b,148-st.midi,1.5,0.6); }
-    sb.line(90,'yes. like that. it is easier when you stop resisting.');
-    // the bow
+    // the bow — on the understudy path she performs it herself: hands off
     sb.ev(116,{type:'invert',on:false});
     sb.ev(117,{type:'bow'});
     sb.ev(118,{type:'footlights',set:[0,0.8,0.8]});
     sb.ev(121,{type:'footlights',set:[0,0.8,0]});
-    sb.n(120,'head'); sb.m('bl','bell',120,69,3,0.8);
-    sb.chordN(123,['handL','handR']); sb.m('bl','bell',123,72,3,0.6); sb.m('bl','bell',123,76,3,0.6);
-    sb.n(126,'head'); sb.m('bl','bell',126,57,4,0.9);
+    if(path==='understudy'){
+      const resF=(b,lane)=>{ sb.n(b,lane,'resist',{window:0.4});
+        sb.m('cr','creak',b-0.8,40,1,0.8,0.9); };
+      resF(120,'head'); resF(122.5,'handL'); resF(124.5,'handR'); resF(126,'head');
+      sb.m('bl','bell',120,69,3,0.8);
+      sb.m('bl','bell',123,72,3,0.6); sb.m('bl','bell',123,76,3,0.6);
+      sb.m('bl','bell',126,57,4,0.9);
+    } else {
+      sb.n(120,'head'); sb.m('bl','bell',120,69,3,0.8);
+      sb.chordN(123,['handL','handR']); sb.m('bl','bell',123,72,3,0.6); sb.m('bl','bell',123,76,3,0.6);
+      sb.n(126,'head'); sb.m('bl','bell',126,57,4,0.9);
+    }
     sb.ev(127,{type:'footlights',set:[0,0.5,0]});
-    sb.line(128,'bow.');
     sb.ev(130,{type:'blackout',to:1,duration:3});
     // painted audience on the backdrop: rows of heads facing the stage-in-the-stage
     let rows='';
@@ -3517,9 +3726,11 @@ const Charts = (()=>{
 /* ═══ Boot — wiring, deep link (#/chart=<url>), ?edit=1, drag & drop ═══ */
 const Boot = {
   start(){
+    CFG.isTouch=matchMedia&&matchMedia('(pointer:coarse)').matches;
     Settings.load(); Story.load();
     Renderer.init(); L.recompute(); Renderer.resize();
     Input.init(); UI.init(); Editor.initTL();
+    if(CFG.isTouch&&innerHeight>innerWidth) toast('landscape gives the fullest stage — portrait works too',4200);
     addEventListener('resize',()=>{ L.recompute(); Renderer.resize();
       if(Game.S&&Game.S.stageR) Stage.rebuild(Game.S); });
     addEventListener('dragover',e=>e.preventDefault());

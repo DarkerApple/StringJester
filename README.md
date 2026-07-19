@@ -29,10 +29,15 @@ longer strings; Act IV's lead time exceeds half a second.
 
 | Input | Action |
 |---|---|
-| `A S D F G` | head · handL · handR · legL · legR (remappable; a spatial ASDFG→left-to-right preset is in settings) |
+| `A S D F G` | the five strings, straight across the crossbar left→right: handL · legL · head · legR · handR (remappable; a classic A=head preset is in settings) |
 | `← →` or `J K` | crossbar tilt (sustained tilt rocks the puppet into a walk) |
-| tap / drag | tap the actual string hooks; drag the bar to tilt |
+| tap / drag | tap the actual string hooks; keep a finger down for holds; drag the bar to tilt |
 | `Esc` | pause |
+
+**Mobile:** fully playable on touch — enlarged tap targets hit-tested against
+the rendered hooks, multitouch (tilt with one thumb, pluck with the other),
+touch-held holds, and a phone layout that spreads the crossbar to thumb
+width. Landscape gives the fullest stage; portrait works.
 
 First run offers a two-phase calibration: audio offset (tap what you hear) and
 input offset (tap a silent visual pulse), measured separately and stored in
@@ -73,6 +78,23 @@ idle-frames) feeds the story state — never a retry gate.
 Bundled charts carry a small `synth` score rendered offline through the Web
 Audio API at load — zero external assets. Progress, grades and the audience's
 memory of your failures persist in `localStorage`.
+
+### Three storylines
+
+Your grades and the audience's accumulated unease steer the run onto one of
+three paths, and the surtitle scripts of Acts II–V are written per path:
+
+- **The Gentle Hand** — play well and stay calm: the director grows tender,
+  and at the end they let you set the cross down.
+- **The Long Run** — hold the middle and the show is simply… extended. The
+  final surtitle is the first one you ever read.
+- **The Understudy** — falter, and someone starts measuring your cross. On
+  this path the finale changes mechanically: she takes the bow *herself*, and
+  the last notes are resists — the ending is earned by not pulling.
+
+Finishing an act re-evaluates the path, so a run can be pulled back from the
+brink (or lost to it). Replaying Act I after any ending uses a different
+script. Endings and the audience's memory persist until you erase progress.
 
 ## Custom maps — first-class
 
