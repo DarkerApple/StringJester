@@ -1,145 +1,51 @@
-# MARIONETTE
+# 세계 지도 하이라이트 🗺️
 
-*A 2D horror rhythm game for five strings.*
+**나라 이름이나 약자를 입력하면 세계 지도에서 그 나라가 하이라이트되는 웹 게임입니다.**
 
-You are the puppeteer above a paper theater. Five strings run from your wooden
-control cross down to a marionette performing a play on the lit stage below.
-The play is a reenactment of something that really happened. The silhouettes
-in the front row are keeping score.
+타이머, 초기화 버튼, 그리고 세 가지 모드를 갖춘 한 개의 파일짜리 웹사이트예요.
+빌드 과정·설치·외부 라이브러리가 전혀 없습니다 — [`index.html`](index.html) 을
+브라우저에서 열기만 하면 바로 실행됩니다.
 
-**One file. No build step, no dependencies, no external assets.** Open
-[`index.html`](index.html) in any modern browser and play.
+## 기능
 
-## The signature mechanic — string travel time
+- **입력창에 나라 이름을 입력** → 해당 국가가 지도에서 초록색으로 칠해집니다.
+  - 한글 이름: `대한민국`, `미국`, `일본`, `남아프리카공화국` …
+  - 영문 이름: `Brazil`, `france`, `Japan` …
+  - 약자(ISO 코드): `KR`, `US`, `JP`, `UK`, `UAE`, `DRC` …
+  - 별칭도 인식: `호주`(오스트레일리아), `버마`(미얀마), `터키`(튀르키예), `남아공` …
+- **전 세계 208개 나라·지역** — 지도에 그릴 수 있는 180개국 폴리곤 +
+  싱가포르·몰디브·모나코 같은 작은 섬·도시국가 28개는 점(마커)으로 표시.
+- **타이머**와 **초기화** 버튼.
+- **확대/축소·이동** — 마우스 휠로 확대, 드래그로 이동, `＋`/`－`/`전체` 버튼.
+- 자유 탐색 모드에서는 지도를 **직접 클릭**하거나 마우스를 올려 이름을 볼 수 있어요.
 
-When you trigger a string, a pulse spawns at the crossbar and travels down the
-string at a fixed speed. The puppet's limb moves only when the pulse arrives:
+## 세 가지 모드
 
-```
-arrivalTime = inputTime + stringLength / pulseSpeed
-```
-
-Judgment (Perfect ±35ms · Good ±70ms · Early/Late ±120ms) is always evaluated
-against **arrivalTime**, never inputTime — so you play *ahead* of the music by
-exactly the travel latency. A hollow ring contracts onto each crossbar hook:
-press the moment it lands, then watch your pulse fly. Deeper stages pay out
-longer strings; Act IV's lead time exceeds half a second.
-
-## Controls
-
-| Input | Action |
+| 모드 | 설명 |
 |---|---|
-| `A S D F G` | the five strings, straight across the crossbar left→right: handL · legL · head · legR · handR (remappable; a classic A=head preset is in settings) |
-| `← →` or `J K` | crossbar tilt (sustained tilt rocks the puppet into a walk) |
-| tap / drag | tap the actual string hooks; keep a finger down for holds; drag the bar to tilt |
-| `Esc` | pause |
+| **자유 탐색** | 원하는 나라를 자유롭게 입력해 위치를 확인. 스톱워치가 켜지고 찾은 나라 수가 쌓입니다. 학습·탐색용. |
+| **이름 맞히기** | 지도에 무작위 국가가 **금색**으로 표시됩니다. 90초 동안 그 나라 이름을 최대한 많이 맞혀 보세요. 자동으로 해당 지역을 확대해 줍니다. `넘기기`로 건너뛸 수 있어요. |
+| **전세계 도전** | 제한 시간(1·3·5분) 안에 주권국 197개국을 최대한 많이 입력. `X / 197` 로 진행 상황이 표시됩니다. |
 
-**Mobile:** fully playable on touch — enlarged tap targets hit-tested against
-the rendered hooks, multitouch (tilt with one thumb, pluck with the other),
-touch-held holds, and a phone layout that spreads the crossbar to thumb
-width. Landscape gives the fullest stage; portrait works.
+## 실행 방법
 
-First run offers a two-phase calibration: audio offset (tap what you hear) and
-input offset (tap a silent visual pulse), measured separately and stored in
-`localStorage`.
-
-## Failure model — the show never stops
-
-There is no health bar and no fail-out.
-
-- **Slack** — miss a note and that string goes slack: the limb hangs dead with
-  a visible catenary sag until you hit the next note on that string cleanly.
-- **Tangle** — trigger strings against the chart's cross order (or mash
-  adjacent strings) and the pair twists into a literal helix: its input
-  bindings swap. Twists stack to three.
-- **Untangle** — while tangled, a pale call-and-response appears inside the
-  song: watch the shimmer descend, echo it back on the beat. The puppet stands
-  idle center-stage while you do, and the audience's unease climbs.
-
-The end-of-song grade (accuracy, max combo, slack-frames, peak twists,
-idle-frames) feeds the story state — never a retry gate.
-
-## Note types
-
-`pull` (tap) · `hold` (sustained tension) · `tilt` (match an angle curve) ·
-`resist` (she moves on her own — pulling during the window is the miss) ·
-`chord` (simultaneous strings).
-
-## Campaign — five acts
-
-1. **The Rehearsal** — nursery flats, short strings, music-box waltz.
-2. **The House** — the same choreography, re-scored and staged literally.
-3. **The Resistance** — the puppet moves before your pulses arrive.
-4. **The Deep Stage** — maximum depth, longest latency, failing footlights.
-5. **The Bow** — mid-song she looks up; the camera pulls back; the strings
-   continue upward from your own wrists, and the final section inverts the
-   mechanic: pulses arrive from above and you *react* instead of anticipate.
-
-Bundled charts carry a small `synth` score rendered offline through the Web
-Audio API at load — zero external assets. Progress, grades and the audience's
-memory of your failures persist in `localStorage`.
-
-### Three storylines
-
-Your grades and the audience's accumulated unease steer the run onto one of
-three paths, and the surtitle scripts of Acts II–V are written per path:
-
-- **The Gentle Hand** — play well and stay calm: the director grows tender,
-  and at the end they let you set the cross down.
-- **The Long Run** — hold the middle and the show is simply… extended. The
-  final surtitle is the first one you ever read.
-- **The Understudy** — falter, and someone starts measuring your cross. On
-  this path the finale changes mechanically: she takes the bow *herself*, and
-  the last notes are resists — the ending is earned by not pulling.
-
-Finishing an act re-evaluates the path, so a run can be pulled back from the
-brink (or lost to it). Replaying Act I after any ending uses a different
-script. Endings and the audience's memory persist until you erase progress.
-
-## Custom maps — first-class
-
-Charts are JSON (`marionette.chart/1`) and use the identical loader as the
-campaign. Import by dropping a `.chart.json` on the page, by URL, or via the
-shareable deep link:
+특별한 준비가 필요 없습니다.
 
 ```
-index.html#/chart=<url-of-json>        (also accepts data:application/json;base64,…)
+index.html 을 더블클릭하거나 브라우저로 열기
 ```
 
-`meta.audio` may be a URL (resolved relative to the chart URL) or you can
-attach a local audio file; bundled-style charts may embed a `synth` score
-instead. Three example charts of increasing scope ship in Free Play,
-exercising every note type.
+정적 파일이므로 GitHub Pages 등 어떤 정적 호스팅에도 그대로 올릴 수 있습니다.
 
-### Editor (`index.html?edit=1`)
+## 기술 노트
 
-Waveform scrub, snap-to-grid 1/1–1/16, five string lanes plus tilt and event
-lanes, place/drag/delete, hold/tilt duration by edge-drag, live playtest from
-the cursor (`Space`), palette and stage editing, JSON export/copy — round-trip
-lossless. Nothing autosaves (localStorage is reserved for settings,
-calibration and campaign progress): export your work.
-
-The full chart format is documented in-game under **Help**, including stage
-flats (paper-cut polygon layers with parallax), footlights, `puppetDepth`, and
-events (`flatSwap`, `depth`, `audience`, `scare`, `line`, `footlights`,
-`invert`, `pullback`, `bow`, `blackout`).
-
-## Accessibility
-
-Remappable keys · adjustable judgment window · reduce-flashing toggle ·
-disable-jumpscares toggle (scares become a neutral cue) · visual metronome.
-
-## Technical notes
-
-- Single `AudioContext` clock; song position is `ctx.currentTime - startTime`
-  against a decoded `AudioBuffer` — never rAF deltas or `audio.currentTime`.
-- Inputs are timestamped from `event.timeStamp` and mapped onto the audio
-  clock, not the processing frame.
-- Fixed-timestep simulation at 120 Hz, decoupled from render; render is a
-  pure function of the state object.
-- Static flats pre-render to offscreen canvases; footlights are the dominant
-  (and only diegetic) light source, so all shadows project upward onto the
-  backdrop.
-- Dev hooks: `MARIONETTE.dev.selftest()` (logic checks) and
-  `MARIONETTE.dev.autotest('ex1')` (plays a chart through the real input
-  pipeline and returns the results screen data).
+- **단일 파일, 무의존성.** 지도 데이터(각국 폴리곤 + 한글/영문/약자/별칭)를
+  `index.html` 안에 JSON으로 내장하고, 로드 시 SVG `<path>`/`<circle>` 로 그립니다.
+- 지도는 **정거원통도법(equirectangular)** 으로, 데이터 생성 단계에서 좌표를 미리
+  투영·반올림(소수 2자리)해 파일 크기를 줄였습니다.
+- 원본 국경 데이터는 공개 데이터셋
+  [`johan/world.geo.json`](https://github.com/johan/world.geo.json)
+  (Natural Earth 기반, 퍼블릭 도메인)을 사용했습니다.
+- 입력 매칭은 대소문자·공백·기호를 제거해 정규화한 뒤(한글/영문/숫자만 비교),
+  이름·별칭·ISO 2·3자리 코드를 하나의 표로 조회합니다. 별칭 충돌은 빌드 시 검사합니다.
+- 확대/축소·이동과 문제 자동 포커스는 SVG `viewBox` 를 부드럽게 보간해 구현했습니다.
