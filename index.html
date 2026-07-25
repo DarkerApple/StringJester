@@ -455,8 +455,11 @@ select#warsel:focus{outline:none;border-color:var(--border2)}
   #mapctrl .btn{width:42px;height:42px}
   footer{display:none}
   #stage{flex-direction:column}
-  #mapwrap{min-height:44vh}
-  #studypanel{flex:0 0 44%;width:auto;border-left:none;border-top:1px solid var(--border)}
+  /* when a side panel is showing, split the stage so its list scrolls and all hints are visible;
+     when it's hidden (quiz/find/trivia/compare…), the map fills the whole stage */
+  #mapwrap{flex:1 1 40%;min-height:0}
+  #studypanel{flex:1 1 46%;width:auto;border-left:none;border-top:1px solid var(--border);min-height:0}
+  #trivia,#compare{overflow-y:auto;justify-content:flex-start;padding-top:24px;gap:14px}
   .sp-flag{font-size:20px;width:26px}
   .sp-name{font-size:14px}
 }
@@ -920,7 +923,7 @@ const state={mode:'free',running:false,found:new Set(),score:0,target:null,pool:
   t0:0,elapsed:0,duration:0,ended:false,queue:[],countUp:true,region:'전세계',
   regionIds:null,regionTotal:0,cards:[],cardIdx:0,gen:0,
   metric:'pop',rankAsc:false,rankList:null,hintQueue:[],hintTarget:null,hints:[],hintShown:0,
-  feverHints:[],feverShown:0,hintCost:0,roundBase:10,
+  feverHints:[],feverShown:0,hintCost:0,roundBase:10,hintKinds:new Set(['hist','geo','stat','fever']),
   lv:{},conquerK:5,conquerTotal:0,conquerDone:0,
   lang:'ko',
   vs:false,turn:0,p:[0,0],vsRounds:10,vsDone:0,
@@ -1062,7 +1065,7 @@ function setInputMode(kind){ // text | quiz | flag | click | study | place | hin
   el.micbtn.classList.toggle('hidden',!(showText && voiceSupported()));
   el.skip.classList.toggle('hidden',!(kind==='quiz'||kind==='flag'||kind==='click'||kind==='hint'||kind==='locate'||kind==='capital'));
   el.hintbtn.classList.toggle('hidden',kind!=='hint');
-  el.feverbtn.classList.toggle('hidden',kind!=='hint');
+  el.feverbtn.classList.toggle('hidden',kind!=='hint' || !(state.hintKinds&&state.hintKinds.has('fever')));
   const step=(kind==='study');
   [el.prev,el.shuffle,el.next].forEach(b=>b.classList.toggle('hidden',!step));
 }
@@ -1376,45 +1379,52 @@ function areaRankClue(e){
 // Returns {normal:[...clues...], fever:[...strong clues...]}. Strong identifying clues
 // (history / dispute) lead; the generic clues are shuffled so the order still varies.
 function buildHints(e){
-  const s=e.st||{}, en=EN(), lead=[], gen=[], F=[];
+  const s=e.st||{}, en=EN(), lead=[], geo=[], stat=[], F=[];
   const nbs=en?(s.nbe||[]):(s.nb||[]);
-  // ---------- strong identifying clues (shown first) ----------
+  const K=state.hintKinds||new Set(['hist','geo','stat','fever']);
+  // ---------- 📜 history / ⚔️ dispute (strong identifying) ----------
   const HF=(e.i2&&HISTFACTS[e.i2])||null;
   if(HF&&HF.hist) lead.push('📜 '+(en?HF.hist.en:HF.hist.ko));
   if(HF&&HF.dispute) lead.push('⚔️ '+(en?HF.dispute.en:HF.dispute.ko));
-  // ---------- generic clues (shuffled) ----------
-  gen.push(en?('This country is in <b>'+regionOf(e)+'</b>.'):('이 나라는 <b>'+regionOf(e)+'</b>에 있어요.'));
-  { const ar=areaRankClue(e); if(ar) gen.push(ar); }
+  // ---------- geography ----------
+  geo.push(en?('This country is in <b>'+regionOf(e)+'</b>.'):('이 나라는 <b>'+regionOf(e)+'</b>에 있어요.'));
+  { const ar=areaRankClue(e); if(ar) geo.push(ar); }
   { const loc=[];
     if(s.lat!=null) loc.push(en?(s.lat>=0?'Northern Hemisphere':'Southern Hemisphere'):(s.lat>=0?'북반구':'남반구'));
     if(s.land!=null) loc.push(en?(s.land?'landlocked':'has a coastline'):(s.land?'내륙국(바다에 접하지 않음)':'바다에 접한 나라'));
-    if(loc.length) gen.push(en?('Location: <b>'+loc.join('</b>, <b>')+'</b>.'):('위치: <b>'+loc.join('</b>, <b>')+'</b>.')); }
-  if(s.temp!=null) gen.push(en?('Its average yearly temperature is about <b>'+s.temp+'℃</b>.'):('연평균 기온은 약 <b>'+s.temp+'℃</b>예요.'));
-  if(s.pop) gen.push(en?('Its population is about <b>'+fmtPop(s.pop)+'</b>.'):('인구는 약 <b>'+fmtPop(s.pop)+'</b>이에요.'));
-  if(s.dens) gen.push(en?('Its population density is about <b>'+fmtInt(s.dens)+' /km²</b>.'):('인구 밀도는 약 <b>'+fmtInt(s.dens)+' 명/km²</b>이에요.'));
-  if(en?s.gove:s.gov) gen.push(en?('Its government is a <b>'+s.gove+'</b>.'):('정부 형태는 <b>'+s.gov+'</b>이에요.'));
+    if(loc.length) geo.push(en?('Location: <b>'+loc.join('</b>, <b>')+'</b>.'):('위치: <b>'+loc.join('</b>, <b>')+'</b>.')); }
+  if(s.temp!=null) geo.push(en?('Its average yearly temperature is about <b>'+s.temp+'℃</b>.'):('연평균 기온은 약 <b>'+s.temp+'℃</b>예요.'));
+  if(s.elev!=null) geo.push(en?('Its average elevation is about <b>'+fmtInt(s.elev)+' m</b>.'):('평균 고도는 약 <b>'+fmtInt(s.elev)+' m</b>예요.'));
+  if(nbs.length) geo.push(en?('It shares land borders with <b>'+nbs.length+'</b> countries.'):('육지 국경을 맞댄 나라가 <b>'+nbs.length+'</b>개예요.'));
+  else if(s.land===0) geo.push(en?('It is an <b>island nation</b> with no land borders.'):('육지 국경이 없는 <b>섬나라</b>예요.'));
+  // ---------- population / economy stats ----------
+  if(s.pop) stat.push(en?('Its population is about <b>'+fmtPop(s.pop)+'</b>.'):('인구는 약 <b>'+fmtPop(s.pop)+'</b>이에요.'));
+  if(s.dens) stat.push(en?('Its population density is about <b>'+fmtInt(s.dens)+' /km²</b>.'):('인구 밀도는 약 <b>'+fmtInt(s.dens)+' 명/km²</b>이에요.'));
+  if(en?s.gove:s.gov) stat.push(en?('Its government is a <b>'+s.gove+'</b>.'):('정부 형태는 <b>'+s.gov+'</b>이에요.'));
   if(s.gdp||s.gpc){ const t=[]; if(s.gdp)t.push(en?('GDP about '+fmtUSD(s.gdp)):('GDP 약 '+fmtUSD(s.gdp))); if(s.gpc)t.push(en?('GDP per capita about $'+fmtInt(s.gpc)):('1인당 GDP 약 $'+fmtInt(s.gpc)));
-    gen.push(en?('Economy: <b>'+t.join('</b>, <b>')+'</b>.'):('경제: <b>'+t.join('</b>, <b>')+'</b>.')); }
-  if(s.elev!=null) gen.push(en?('Its average elevation is about <b>'+fmtInt(s.elev)+' m</b>.'):('평균 고도는 약 <b>'+fmtInt(s.elev)+' m</b>예요.'));
-  if(nbs.length) gen.push(en?('It shares land borders with <b>'+nbs.length+'</b> countries.'):('육지 국경을 맞댄 나라가 <b>'+nbs.length+'</b>개예요.'));
-  else if(s.land===0) gen.push(en?('It is an <b>island nation</b> with no land borders.'):('육지 국경이 없는 <b>섬나라</b>예요.'));
-  // ---------- fever clues (very revealing, cost more points) ----------
+    stat.push(en?('Economy: <b>'+t.join('</b>, <b>')+'</b>.'):('경제: <b>'+t.join('</b>, <b>')+'</b>.')); }
+  // ---------- 🔥 fever (very revealing) ----------
   if(en && e.en) F.push('Its English name starts with <b>'+e.en.charAt(0).toUpperCase()+'</b>.');
   else if(!en && e.ko) F.push('이름은 <b>'+e.ko.charAt(0)+'</b>(으)로 시작해요.');
   if(nbs.length) F.push(en?('It borders <b>'+nbs.join(', ')+'</b>.'):('<b>'+(s.nb||[]).join('·')+'</b> 와(과) 국경을 맞대고 있어요.'));
   if(en?s.cape:s.cap) F.push(en?('Its capital is <b>'+s.cape+'</b>.'):('수도는 <b>'+s.cap+'</b>이에요.'));
   if(e.i2) F.push((en?'This is its flag: ':'이 나라의 국기예요: ')+'<span style="font-size:1.55em;vertical-align:-3px">'+flagEmoji(e.i2)+'</span>');
+  // keep only the chosen kinds (always leave at least the region/geo clue)
+  const useLead = K.has('hist') ? lead : [];
+  let gen = (K.has('geo')?geo:[]).concat(K.has('stat')?stat:[]);
+  if(!gen.length) gen=geo;                 // never leave zero normal clues
+  const fever = K.has('fever') ? F : [];
   // Difficulty mix: the strong identifying clues (history/dispute) are placed differently
   // each round so some are easy (big clue first) and some are genuinely hard (vague first).
   let normal, tier;
-  if(!lead.length){ tier='vague'; normal=shuffleArr(gen); }
+  if(!useLead.length){ tier='vague'; normal=shuffleArr(gen); }
   else{
     const r=Math.random();
-    if(r<0.34){ tier='easy'; normal=shuffleArr(lead).concat(shuffleArr(gen)); }          // big clue up front
-    else if(r<0.67){ tier='mixed'; normal=shuffleArr(lead.concat(gen)); }                 // everything jumbled
-    else{ tier='hard'; normal=shuffleArr(gen).concat(shuffleArr(lead)); }                 // vague first, strong clue last
+    if(r<0.34){ tier='easy'; normal=shuffleArr(useLead).concat(shuffleArr(gen)); }        // big clue up front
+    else if(r<0.67){ tier='mixed'; normal=shuffleArr(useLead.concat(gen)); }              // everything jumbled
+    else{ tier='hard'; normal=shuffleArr(gen).concat(shuffleArr(useLead)); }              // vague first, strong clue last
   }
-  return {normal, fever:shuffleArr(F), tier};
+  return {normal, fever:shuffleArr(fever), tier};
 }
 function hintPotential(){ return Math.max(1, (state.roundBase||10) - (state.hintCost||0)); }
 function startHint(){
@@ -7783,7 +7793,7 @@ function modeTitle(x){ return EN()?(x.te||x.t):x.t; }
 function modeDesc(x){ return EN()?(x.de||x.d):x.d; }
 /* ---- pre-game setup (choose place/criteria before the timer starts) ---- */
 const SETUP_CFG={ study:['region'],place:['region'],
-  quiz:['region','vs'],findmap:['region','vs'],flag:['region','vs'],hint:['region','vs'],
+  quiz:['region','vs'],findmap:['region','vs'],flag:['region','vs'],hint:['region','hintkinds','vs'],
   capital:['region','vs'],compare:['cmpmetric','region'],
   conquer:['region'],region:['region'],countdown:['dur'],rank:['metric','region'],
   locate:['region'],
@@ -7825,6 +7835,12 @@ function setupControl(kind){
       allCats().map(c=>({v:c,t:catName(c)})),
       it=>state.triviaCats.has(it.v),
       (it,b)=>{ if(state.triviaCats.has(it.v)){ if(state.triviaCats.size<=1) return; state.triviaCats.delete(it.v);} else state.triviaCats.add(it.v); b.classList.toggle('on',state.triviaCats.has(it.v)); }); }
+  else if(kind==='hintkinds'){ if(!state.hintKinds) state.hintKinds=new Set(['hist','geo','stat','fever']);
+    const NORMAL=['hist','geo','stat']; // at least one non-fever category must stay on
+    return chipRow(LT('힌트 종류 (눌러서 켜고 끄기)','Hint types (tap to toggle)'),
+      [{v:'hist',t:LT('📜 역사·분쟁','📜 History/dispute')},{v:'geo',t:LT('🗺️ 지리','🗺️ Geography')},{v:'stat',t:LT('📊 통계','📊 Stats')},{v:'fever',t:LT('🔥 확실한 힌트','🔥 Sure hints')}],
+      it=>state.hintKinds.has(it.v),
+      (it,b)=>{ if(state.hintKinds.has(it.v)){ if(NORMAL.includes(it.v) && NORMAL.filter(k=>state.hintKinds.has(k)).length<=1) return; state.hintKinds.delete(it.v);} else state.hintKinds.add(it.v); b.classList.toggle('on',state.hintKinds.has(it.v)); }); }
   return row;
 }
 function showSetup(mode){
