@@ -25,6 +25,28 @@
   --shadow:0 16px 48px rgba(0,0,0,.6);
   --font:'Gowun Dodum',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',Segoe UI,Roboto,sans-serif;
 }
+/* ---------- light theme ---------- */
+html[data-theme="light"]{
+  --bg:#eef1f6; --ocean1:#dde4ee; --ocean2:#eaeef4; --ocean3:#cdd6e3;
+  --home-grad1:#ffffff; --home-grad2:#f2f5fa; --card-grad:#e9edf4;
+  --surface:#ffffff; --surface2:#eef1f6; --surface3:#e2e7f0;
+  --border:#d5dbe4; --border2:#c1c9d5;
+  --land:#c6cdd9; --land-stroke:#98a1b2; --hover:#7f8a9c;
+  --found:#1a9e57; --found-stroke:#0b6f3c;
+  --target:#dca100;
+  --text:#161a20; --muted:#59616e; --faint:#8992a1;
+  --accent:#171b22; --accent-ink:#ffffff;
+  --p1:#2f7fe0; --p2:#e0722a;
+  --shadow:0 16px 48px rgba(30,40,60,.18);
+}
+/* ---------- colorblind-safe accents (Okabe–Ito) ---------- */
+html[data-cb="1"]{
+  --found:#009e73; --found-stroke:#7fe8c8;
+  --target:#e69f00;
+  --p1:#0072b2; --p1-dim:rgba(0,114,178,.18); --p2:#d55e00; --p2-dim:rgba(213,94,0,.18);
+  --fever:#cc79a7;
+}
+html[data-cb="1"][data-theme="light"]{ --found-stroke:#0b6f4c; }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{
@@ -79,6 +101,8 @@ select#region:focus{outline:none;border-color:var(--border2)}
 .btn:active{transform:translateY(1px)}
 .btn.solid{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 .btn.solid:hover{filter:brightness(.94)}
+.btn.on{background:color-mix(in srgb,var(--found) 22%,var(--surface2));border-color:var(--found)}
+#themebtn,#cbbtn{padding:8px 11px}
 
 /* ---------- prompt + input ---------- */
 #promptbar{
@@ -189,7 +213,7 @@ select#metric:focus{outline:none;border-color:var(--border2)}
 
 /* ---------- map ---------- */
 #mapwrap{position:relative;flex:1;min-height:0;overflow:hidden;
-  background:radial-gradient(120% 90% at 50% -10%,var(--ocean1),var(--ocean2) 72%,#060608 100%);}
+  background:radial-gradient(120% 90% at 50% -10%,var(--ocean1),var(--ocean2) 72%,var(--ocean3,#060608) 100%);}
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;display:block}
 #map.grabbing{cursor:grabbing}
 #map path,#map circle{
@@ -264,7 +288,7 @@ footer kbd{background:var(--surface2);border:1px solid var(--border);border-radi
 
 /* ---------- home screen (modern app-launcher grid) ---------- */
 #home{position:fixed;inset:0;z-index:40;overflow-y:auto;display:none;
-  background:radial-gradient(130% 90% at 50% -20%,#181b22 0%,#101216 42%,var(--bg) 100%)}
+  background:radial-gradient(130% 90% at 50% -20%,var(--home-grad1,#181b22) 0%,var(--home-grad2,#101216) 42%,var(--bg) 100%)}
 #home.show{display:block}
 .home-inner{position:relative;max-width:1120px;margin:0 auto;padding:40px 24px calc(56px + env(safe-area-inset-bottom))}
 .home-title{display:flex;align-items:center;gap:12px;font-size:clamp(26px,4.4vw,34px);font-weight:800;letter-spacing:-.03em}
@@ -275,7 +299,7 @@ footer kbd{background:var(--surface2);border:1px solid var(--border);border-radi
 .home-sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--border) 0%,transparent 100%)}
 .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px}
 .gcard{display:flex;align-items:center;gap:15px;text-align:left;padding:17px 18px;border-radius:16px;
-  background:linear-gradient(180deg,var(--surface) 0%,#111318 100%);border:1px solid var(--border);
+  background:linear-gradient(180deg,var(--surface) 0%,var(--card-grad,#111318) 100%);border:1px solid var(--border);
   cursor:pointer;color:var(--text);font:inherit;position:relative;overflow:hidden;
   transition:transform .16s cubic-bezier(.2,.8,.3,1.2),border-color .16s,box-shadow .2s}
 .gcard::before{content:"";position:absolute;inset:0;border-radius:16px;padding:1px;pointer-events:none;opacity:0;
@@ -303,6 +327,7 @@ footer kbd{background:var(--surface2);border:1px solid var(--border);border-radi
 .home-chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border2);
   color:var(--text);font:inherit;font-size:13.5px;font-weight:700;padding:8px 14px;border-radius:999px;cursor:pointer;transition:.14s}
 .home-chip:hover{background:var(--surface3);border-color:var(--muted)}
+.home-chip.on{background:color-mix(in srgb,var(--found) 22%,var(--surface2));border-color:var(--found)}
 .home-chip .ic{width:16px;height:16px}
 /* profile / stats card */
 #profilecard{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:16px 18px;margin:4px 0 10px}
@@ -350,7 +375,7 @@ footer kbd{background:var(--surface2);border:1px solid var(--border);border-radi
 .auth-signedin .pc-avatar{margin:4px auto 10px;width:56px;height:56px;font-size:24px}
 /* keyboard focus visibility */
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-.gcard:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.gcard:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* ---------- pre-game setup screen ---------- */
@@ -478,7 +503,9 @@ select#warsel:focus{outline:none;border-color:var(--border2)}
       <button class="btn hidden" id="homebtn" data-icon="home"><span class="t">홈</span></button>
       <div class="brand" id="brand"><span data-icon="globe"></span> 지오라마</div>
       <span class="modetitle" id="modetitle"></span>
-      <button class="btn" id="langbtn" title="Language / 언어" style="margin-left:auto">EN</button>
+      <button class="btn" id="themebtn" title="테마 / Theme" aria-label="테마 바꾸기" style="margin-left:auto"><span class="ti">🌙</span></button>
+      <button class="btn" id="cbbtn" title="색약 모드 / Colorblind-safe" aria-label="색약 친화 색상 켜기/끄기">🎨</button>
+      <button class="btn" id="langbtn" title="Language / 언어">EN</button>
     </div>
     <div class="bar bar-tools">
       <div class="chip" id="timer"><span class="lbl">시간</span><span class="val" id="timerval">0:00</span></div>
@@ -564,7 +591,11 @@ select#warsel:focus{outline:none;border-color:var(--border2)}
   <div class="home-inner">
     <div class="home-top">
       <button class="home-chip" id="profilebtn" aria-haspopup="dialog"><span data-icon="user"></span> <span id="profilebtn-t">로그인</span></button>
-      <button class="home-chip" id="homelang" title="Language / 언어">English</button>
+      <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end">
+        <button class="home-chip" id="hometheme" title="테마 / Theme" aria-label="테마 바꾸기"><span class="ti">🌙</span></button>
+        <button class="home-chip" id="homecb" title="색약 모드 / Colorblind-safe" aria-label="색약 친화 색상">🎨</button>
+        <button class="home-chip" id="homelang" title="Language / 언어">English</button>
+      </div>
     </div>
     <h1 class="home-title"><span data-icon="globe"></span> 지오라마</h1>
     <p class="home-sub">지도로 배우고 겨루는 지리 게임 모음 · 원하는 놀이를 골라 보세요</p>
@@ -946,7 +977,7 @@ const el={
   setup:$('setup'),setupIc:$('setup-ic'),setupTitle:$('setup-title'),setupDesc:$('setup-desc'),setupBody:$('setup-body'),setupStart:$('setup-start'),setupBack:$('setup-back'),
   warsel:$('warsel'),trivia:$('trivia'),tvWar:$('tv-war'),tvProg:$('tv-prog'),tvBar:$('tv-barfill'),tvQ:$('tv-q'),tvOpts:$('tv-opts'),tvFact:$('tv-fact'),
   burst:$('burst'),burstIc:$('burst-ic'),burstTxt:$('burst-txt'),
-  langbtn:$('langbtn'),homelang:$('homelang'),vsbar:$('vsbar'),
+  langbtn:$('langbtn'),homelang:$('homelang'),themebtn:$('themebtn'),cbbtn:$('cbbtn'),hometheme:$('hometheme'),homecb:$('homecb'),vsbar:$('vsbar'),
   compare:$('compare'),cmpQ:$('cmp-q'),cmpA:$('cmp-a'),cmpB:$('cmp-b'),cmpFact:$('cmp-fact'),
   profilebtn:$('profilebtn'),profilebtnT:$('profilebtn-t'),profilecard:$('profilecard'),
   auth:$('auth'),authBody:$('auth-body'),authClose:$('auth-close'),
@@ -8179,6 +8210,25 @@ function applyLang(){
 function toggleLang(){ state.lang=EN()?'ko':'en'; applyLang(); }
 el.langbtn.onclick=toggleLang;
 el.homelang.onclick=toggleLang;
+
+/* ================= theme (dark / light) + colorblind-safe accents ================= */
+const THKEY='wmh_theme_v1';
+let THEME=(function(){ try{ return JSON.parse(localStorage.getItem(THKEY))||{}; }catch(e){ return {}; } })();
+function applyTheme(){
+  const light=THEME.mode==='light';
+  document.documentElement.setAttribute('data-theme', light?'light':'dark');
+  if(THEME.cb) document.documentElement.setAttribute('data-cb','1'); else document.documentElement.removeAttribute('data-cb');
+  const tm=document.querySelector('meta[name="theme-color"]'); if(tm) tm.setAttribute('content', light?'#eef1f6':'#0b0b0d');
+  const alabel=LT(light?'어두운 테마로':'밝은 테마로', light?'Switch to dark':'Switch to light');
+  [el.themebtn,el.hometheme].forEach(btn=>{ if(btn){ const ti=btn.querySelector('.ti'); if(ti) ti.textContent=light?'☀️':'🌙'; btn.setAttribute('aria-label',alabel); } });
+  [el.cbbtn,el.homecb].forEach(btn=>{ if(btn){ btn.classList.toggle('on',!!THEME.cb); btn.setAttribute('aria-pressed', THEME.cb?'true':'false'); } });
+}
+function saveTheme(){ try{ localStorage.setItem(THKEY,JSON.stringify(THEME)); }catch(e){} }
+function toggleTheme(){ THEME.mode=(THEME.mode==='light')?'dark':'light'; saveTheme(); applyTheme(); }
+function toggleCB(){ THEME.cb=!THEME.cb; saveTheme(); applyTheme(); }
+el.themebtn.onclick=toggleTheme; el.hometheme.onclick=toggleTheme;
+el.cbbtn.onclick=toggleCB; el.homecb.onclick=toggleCB;
+applyTheme();
 
 /* ================= local profiles (saved in THIS browser only — no server) ================= */
 const AKEY='wmh_accounts_v1';
